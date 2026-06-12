@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -49,7 +49,7 @@ export function ApiKeyPanel() {
   const { checkPermission } = useRolePermission()
   const canManageApiKey = checkPermission(PERMISSIONS.MANAGE_API_KEY)
 
-  const fetchApiKeys = async () => {
+  const fetchApiKeys = useCallback(async () => {
     try {
       const res = await fetch("/api/api-keys")
       if (!res.ok) throw new Error(t("createFailed"))
@@ -65,13 +65,13 @@ export function ApiKeyPanel() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [t, toast])
 
   useEffect(() => {
     if (canManageApiKey) {
       fetchApiKeys()
     }
-  }, [canManageApiKey])
+  }, [canManageApiKey, fetchApiKeys])
 
   const { config } = useConfig()
 

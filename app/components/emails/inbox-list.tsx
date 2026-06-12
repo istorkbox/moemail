@@ -7,7 +7,6 @@ import { Mail, RefreshCw, Search, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/use-toast"
 import { useThrottle } from "@/hooks/use-throttle"
 
 interface Message {
@@ -45,7 +44,6 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
   const [total, setTotal] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
-  const { toast: _toast } = useToast()
 
   // 防抖搜索：当用户停止输入300ms后才执行搜索
   useEffect(() => {

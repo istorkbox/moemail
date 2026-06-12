@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Loader2 } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
@@ -55,7 +55,7 @@ export function SharedMessageDetail({
     }
   }, [message])
 
-  const updateIframeContent = () => {
+  const updateIframeContent = useCallback(() => {
     if (viewMode === "html" && message?.html && iframeRef.current) {
       const iframe = iframeRef.current
       const doc = iframe.contentDocument || iframe.contentWindow?.document
@@ -147,11 +147,11 @@ export function SharedMessageDetail({
         }
       }
     }
-  }
+  }, [message?.html, theme, viewMode])
 
   useEffect(() => {
-    updateIframeContent()
-  }, [message?.html, viewMode, theme])
+    return updateIframeContent()
+  }, [updateIframeContent])
 
   if (loading) {
     return (
