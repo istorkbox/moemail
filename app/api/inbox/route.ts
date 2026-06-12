@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     }
 
     // 构建基础查询条件
-    let baseConditions = and(
+    let conditions: any = and(
       inArray(messages.emailId, emailIds),
       or(
         ne(messages.type, "sent"),
@@ -54,8 +54,8 @@ export async function GET(request: Request) {
     // 添加搜索条件
     if (search && search.trim()) {
       const searchTerm = search.trim().toLowerCase()
-      baseConditions = and(
-        baseConditions,
+      conditions = and(
+        conditions,
         or(
           sql`LOWER(${messages.subject}) LIKE ${`%${searchTerm}%`}`,
           sql`LOWER(${messages.fromAddress}) LIKE ${`%${searchTerm}%`}`,
@@ -67,15 +67,15 @@ export async function GET(request: Request) {
     // 获取总数
     const totalResult = await db.select({ count: sql<number>`count(*)` })
       .from(messages)
-      .where(baseConditions)
+      .where(conditions)
     const totalCount = Number(totalResult[0].count)
 
     // 构建分页条件
-    const conditions = [baseConditions]
+    const whereConditions = [conditions]
 
     if (cursor) {
       const { timestamp, id } = decodeCursor(cursor)
-      conditions.push(
+      whereConditions.push(
         or(
           lt(messages.receivedAt, new Date(timestamp)),
           and(
@@ -102,7 +102,7 @@ export async function GET(request: Request) {
     })
     .from(messages)
     .innerJoin(emails, eq(messages.emailId, emails.id))
-    .where(and(...conditions))
+    .where(and(...whereConditions))
     .orderBy((tables: any) => [
       tables.messages.receivedAt ? tables.messages.receivedAt.desc() : null,
       tables.messages.id.desc()
