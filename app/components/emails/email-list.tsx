@@ -58,23 +58,32 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   const [total, setTotal] = useState(0)
   const [emailToDelete, setEmailToDelete] = useState<Email | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const { toast } = useToast()
 
-  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
-  const filteredEmails = useMemo(() => {
-    if (!normalizedSearchQuery) return emails
+  // 防抖搜索：当用户停止输入300ms后才执行搜索
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
-    return emails.filter(email =>
-      email.address.toLowerCase().includes(normalizedSearchQuery)
-    )
-  }, [emails, normalizedSearchQuery])
-  const hasSearchQuery = normalizedSearchQuery.length > 0
+  const filteredEmails = useMemo(() => {
+    return emails
+  }, [emails])
+  
+  const hasSearchQuery = debouncedSearchQuery.trim().length > 0
 
   const fetchEmails = async (cursor?: string) => {
     try {
       const url = new URL("/api/emails", window.location.origin)
       if (cursor) {
         url.searchParams.set('cursor', cursor)
+      }
+      // 添加搜索参数
+      if (debouncedSearchQuery.trim()) {
+        url.searchParams.set('search', debouncedSearchQuery.trim())
       }
       const response = await fetch(url)
       const data = await response.json() as EmailResponse
@@ -130,7 +139,7 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
 
   useEffect(() => {
     if (session) fetchEmails()
-  }, [session])
+  }, [session, debouncedSearchQuery])
 
   const handleDelete = async (email: Email) => {
     try {

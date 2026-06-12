@@ -14,6 +14,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const cursor = searchParams.get('cursor')
+  const search = searchParams.get('search')
   
   const db = createDb()
 
@@ -23,12 +24,21 @@ export async function GET(request: Request) {
       gt(emails.expiresAt, new Date())
     )
 
+    // 添加搜索条件
+    let searchConditions = [baseConditions]
+    if (search && search.trim()) {
+      const searchTerm = search.trim().toLowerCase()
+      searchConditions.push(
+        sql`LOWER(${emails.address}) LIKE ${`%${searchTerm}%`}`
+      )
+    }
+
     const totalResult = await db.select({ count: sql<number>`count(*)` })
       .from(emails)
-      .where(baseConditions)
+      .where(and(...searchConditions))
     const totalCount = Number(totalResult[0].count)
 
-    const conditions = [baseConditions]
+    const conditions = [...searchConditions]
 
     if (cursor) {
       const { timestamp, id } = decodeCursor(cursor)
