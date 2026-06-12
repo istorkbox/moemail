@@ -9,6 +9,7 @@
   },
   "layout": {
     "myEmails": "My Emails",
+    "inbox": "Inbox",
     "selectEmail": "Select an email to view messages",
     "messageContent": "Message Content",
     "selectMessage": "Select a message to view details",
@@ -48,6 +49,15 @@
     "creating": "Creating...",
     "success": "Email created successfully",
     "failed": "Failed to create email"
+  },
+  "inbox": {
+    "loading": "Loading...",
+    "loadingMore": "Loading more...",
+    "noMessages": "No messages yet",
+    "searchPlaceholder": "Search messages (subject, sender, recipient)...",
+    "clearSearch": "Clear search",
+    "noSearchResults": "No matching messages",
+    "messageCount": "{count} messages"
   },
   "messages": {
     "received": "Received",

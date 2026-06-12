@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     )
 
     // 添加搜索条件
-    let searchConditions = [baseConditions]
+    const searchConditions = [baseConditions]
     if (search && search.trim()) {
       const searchTerm = search.trim().toLowerCase()
       searchConditions.push(

@@ -139,6 +139,7 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
 
   useEffect(() => {
     if (session) fetchEmails()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, debouncedSearchQuery])
 
   const handleDelete = async (email: Email) => {

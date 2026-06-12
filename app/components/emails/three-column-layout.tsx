@@ -3,17 +3,32 @@
 import { useState } from "react"
 import { useTranslations } from "next-intl"
 import { EmailList } from "./email-list"
+import { InboxList } from "./inbox-list"
 import { MessageListContainer } from "./message-list-container"
 import { MessageView } from "./message-view"
 import { SendDialog } from "./send-dialog"
 import { cn } from "@/lib/utils"
 import { useCopy } from "@/hooks/use-copy"
 import { useSendPermission } from "@/hooks/use-send-permission"
-import { Copy } from "lucide-react"
+import { Copy, Inbox, Mail } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface Email {
   id: string
   address: string
+}
+
+interface Message {
+  id: string
+  emailId: string
+  emailAddress: string
+  from_address?: string
+  to_address?: string
+  subject: string
+  content: string
+  html?: string
+  received_at?: number
+  sent_at?: number
 }
 
 export function ThreeColumnLayout() {
@@ -22,6 +37,7 @@ export function ThreeColumnLayout() {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
   const [selectedMessageType, setSelectedMessageType] = useState<'received' | 'sent'>('received')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [leftTab, setLeftTab] = useState<'emails' | 'inbox'>('emails')
   const { copyToClipboard } = useCopy()
   const { canSend: canSendEmails } = useSendPermission()
 
@@ -32,7 +48,7 @@ export function ThreeColumnLayout() {
   // 移动端视图逻辑
   const getMobileView = () => {
     if (selectedMessageId) return "message"
-    if (selectedEmail) return "emails"
+    if (selectedEmail || leftTab === 'inbox') return "emails"
     return "list"
   }
 
@@ -47,6 +63,18 @@ export function ThreeColumnLayout() {
     setSelectedMessageType(messageType)
   }
 
+  const handleInboxMessageSelect = (message: Message) => {
+    // 从全局收件箱选择邮件时，需要设置对应的邮箱
+    setSelectedMessageId(message.id)
+    setSelectedMessageType('received')
+    // 找到对应的邮箱并选中
+    const fakeEmail: Email = {
+      id: message.emailId,
+      address: message.emailAddress
+    }
+    setSelectedEmail(fakeEmail)
+  }
+
   const handleSendSuccess = () => {
     setRefreshTrigger(prev => prev + 1)
   }
@@ -56,18 +84,41 @@ export function ThreeColumnLayout() {
       {/* 桌面端三栏布局 */}
       <div className="hidden lg:grid grid-cols-12 gap-4 h-full min-h-0">
         <div className={cn("col-span-3", columnClass)}>
-          <div className={headerClass}>
-            <h2 className={titleClass}>{t("myEmails")}</h2>
-          </div>
-          <div className="flex-1 overflow-auto">
-            <EmailList
-              onEmailSelect={(email) => {
-                setSelectedEmail(email)
-                setSelectedMessageId(null)
-              }}
-              selectedEmailId={selectedEmail?.id}
-            />
-          </div>
+          <Tabs value={leftTab} onValueChange={(value) => {
+            setLeftTab(value as 'emails' | 'inbox')
+            setSelectedEmail(null)
+            setSelectedMessageId(null)
+          }} className="h-full flex flex-col">
+            <div className={headerClass}>
+              <TabsList className="w-full">
+                <TabsTrigger value="emails" className="flex-1">
+                  <Mail className="h-4 w-4 mr-2" />
+                  {t("myEmails")}
+                </TabsTrigger>
+                <TabsTrigger value="inbox" className="flex-1">
+                  <Inbox className="h-4 w-4 mr-2" />
+                  {t("inbox")}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            <div className="flex-1 overflow-auto">
+              <TabsContent value="emails" className="h-full m-0">
+                <EmailList
+                  onEmailSelect={(email) => {
+                    setSelectedEmail(email)
+                    setSelectedMessageId(null)
+                  }}
+                  selectedEmailId={selectedEmail?.id}
+                />
+              </TabsContent>
+              <TabsContent value="inbox" className="h-full m-0">
+                <InboxList
+                  onMessageSelect={handleInboxMessageSelect}
+                  selectedMessageId={selectedMessageId}
+                />
+              </TabsContent>
+            </div>
+          </Tabs>
         </div>
 
         <div className={cn("col-span-4", columnClass)}>

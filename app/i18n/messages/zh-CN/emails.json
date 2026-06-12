@@ -9,6 +9,7 @@
   },
   "layout": {
     "myEmails": "我的邮箱",
+    "inbox": "收件箱",
     "selectEmail": "选择邮箱查看消息",
     "messageContent": "邮件内容",
     "selectMessage": "选择邮件查看详情",
@@ -48,6 +49,15 @@
     "creating": "创建中...",
     "success": "邮箱创建成功",
     "failed": "创建邮箱失败"
+  },
+  "inbox": {
+    "loading": "加载中...",
+    "loadingMore": "加载更多...",
+    "noMessages": "暂无邮件",
+    "searchPlaceholder": "搜索邮件（主题、发件人、收件人）...",
+    "clearSearch": "清空搜索",
+    "noSearchResults": "没有匹配的邮件",
+    "messageCount": "{count} 封邮件"
   },
   "messages": {
     "received": "收件箱",
