@@ -92,6 +92,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ 
       message: {
         id: message.id,
+        email_address: email.address,
         from_address: message.fromAddress,
         to_address: message.toAddress,
         subject: message.subject,

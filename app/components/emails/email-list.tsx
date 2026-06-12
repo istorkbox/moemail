@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { CreateDialog } from "./create-dialog"
@@ -59,6 +59,7 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   const [emailToDelete, setEmailToDelete] = useState<Email | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+  const requestGenerationRef = useRef(0)
   const { toast } = useToast()
 
   // 防抖搜索：当用户停止输入300ms后才执行搜索
@@ -69,13 +70,14 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  const filteredEmails = useMemo(() => {
-    return emails
-  }, [emails])
-  
   const hasSearchQuery = debouncedSearchQuery.trim().length > 0
 
   const fetchEmails = async (cursor?: string) => {
+    const requestGeneration = cursor ? requestGenerationRef.current : requestGenerationRef.current + 1
+    if (!cursor) {
+      requestGenerationRef.current = requestGeneration
+    }
+
     try {
       const url = new URL("/api/emails", window.location.origin)
       if (cursor) {
@@ -86,36 +88,33 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
         url.searchParams.set('search', debouncedSearchQuery.trim())
       }
       const response = await fetch(url)
+      if (requestGeneration !== requestGenerationRef.current) return
+      if (!response.ok) {
+        throw new Error(`Failed to fetch emails: ${response.status}`)
+      }
       const data = await response.json() as EmailResponse
+      const nextEmails = Array.isArray(data.emails) ? data.emails : []
+      const nextTotal = typeof data.total === "number" ? data.total : nextEmails.length
       
       if (!cursor) {
-        const newEmails = data.emails
-        const oldEmails = emails
-
-        const lastDuplicateIndex = newEmails.findIndex(
-          newEmail => oldEmails.some(oldEmail => oldEmail.id === newEmail.id)
-        )
-
-        if (lastDuplicateIndex === -1) {
-          setEmails(newEmails)
-          setNextCursor(data.nextCursor)
-          setTotal(data.total)
-          return
-        }
-        const uniqueNewEmails = newEmails.slice(0, lastDuplicateIndex)
-        setEmails([...uniqueNewEmails, ...oldEmails])
-        setTotal(data.total)
+        setEmails(nextEmails)
+        setNextCursor(data.nextCursor ?? null)
+        setTotal(nextTotal)
         return
       }
-      setEmails(prev => [...prev, ...data.emails])
-      setNextCursor(data.nextCursor)
-      setTotal(data.total)
+      setEmails(prev => [...prev, ...nextEmails])
+      setNextCursor(data.nextCursor ?? null)
+      setTotal(nextTotal)
     } catch (error) {
-      console.error("Failed to fetch emails:", error)
+      if (requestGeneration === requestGenerationRef.current) {
+        console.error("Failed to fetch emails:", error)
+      }
     } finally {
-      setLoading(false)
-      setRefreshing(false)
-      setLoadingMore(false)
+      if (requestGeneration === requestGenerationRef.current) {
+        setLoading(false)
+        setRefreshing(false)
+        setLoadingMore(false)
+      }
     }
   }
 
@@ -138,7 +137,12 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   }, 200)
 
   useEffect(() => {
-    if (session) fetchEmails()
+    if (!session) return
+
+    setLoading(true)
+    setNextCursor(null)
+    setLoadingMore(false)
+    fetchEmails()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, debouncedSearchQuery])
 
@@ -235,9 +239,9 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
         <div className="flex-1 overflow-auto p-2" onScroll={handleScroll}>
           {loading ? (
             <div className="text-center text-sm text-gray-500">{t("loading")}</div>
-          ) : filteredEmails.length > 0 ? (
+          ) : emails.length > 0 ? (
             <div className="space-y-1">
-              {filteredEmails.map(email => (
+              {emails.map(email => (
                 <div
                   key={email.id}
                   className={cn("flex items-center gap-2 p-2 rounded cursor-pointer text-sm group",

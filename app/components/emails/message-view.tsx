@@ -11,6 +11,7 @@ import { ShareMessageDialog } from "./share-message-dialog"
 
 interface Message {
   id: string
+  email_address?: string
   from_address?: string
   to_address?: string
   subject: string
@@ -227,8 +228,8 @@ export function MessageView({ emailId, messageId, messageType = 'received' }: Me
           {message.from_address && (
             <p>{t("from")}: {message.from_address}</p>
           )}
-          {message.to_address && (
-            <p>{t("to")}: {message.to_address}</p>
+          {(message.to_address || message.email_address) && (
+            <p>{t("to")}: {message.to_address || message.email_address}</p>
           )}
           <p>{t("time")}: {new Date(message.sent_at || message.received_at || 0).toLocaleString()}</p>
         </div>

@@ -9,6 +9,12 @@ export const runtime = "edge"
 
 const PAGE_SIZE = 20
 const MAX_DELETE_COUNT = 100
+const PAGE_SIZE_OPTIONS = new Set([10, 20, 50, 100])
+
+function getPageSize(limit: string | null) {
+  const pageSize = Number(limit)
+  return PAGE_SIZE_OPTIONS.has(pageSize) ? pageSize : PAGE_SIZE
+}
 
 export async function GET(request: Request) {
   const userId = await getUserId()
@@ -23,6 +29,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const cursor = searchParams.get("cursor")
   const search = searchParams.get("search")
+  const pageSize = getPageSize(searchParams.get("limit"))
 
   const db = createDb()
 
@@ -85,16 +92,16 @@ export async function GET(request: Request) {
       .innerJoin(emails, eq(messages.emailId, emails.id))
       .where(and(...conditions))
       .orderBy(desc(messages.receivedAt), desc(messages.id))
-      .limit(PAGE_SIZE + 1)
+      .limit(pageSize + 1)
 
-    const hasMore = results.length > PAGE_SIZE
+    const hasMore = results.length > pageSize
     const nextCursor = hasMore
       ? encodeCursor(
-          results[PAGE_SIZE - 1].receivedAt.getTime(),
-          results[PAGE_SIZE - 1].id
+          results[pageSize - 1].receivedAt.getTime(),
+          results[pageSize - 1].id
         )
       : null
-    const messageList = hasMore ? results.slice(0, PAGE_SIZE) : results
+    const messageList = hasMore ? results.slice(0, pageSize) : results
 
     return NextResponse.json({
       messages: messageList.map(msg => ({

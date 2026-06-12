@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { Mail, RefreshCw, Search, Trash2, X } from "lucide-react"
@@ -8,7 +8,10 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useThrottle } from "@/hooks/use-throttle"
+
+const PAGE_SIZE_OPTIONS = ["10", "20", "50", "100"]
 
 interface Message {
   id: string
@@ -49,11 +52,13 @@ export function InboxList({ onMessageSelect, selectedMessageId, onMessagesDelete
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [pageSize, setPageSize] = useState("20")
   const [total, setTotal] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([])
   const [error, setError] = useState(false)
+  const requestGenerationRef = useRef(0)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -69,8 +74,14 @@ export function InboxList({ onMessageSelect, selectedMessageId, onMessagesDelete
     && visibleMessageIds.every(id => selectedMessageIds.includes(id))
 
   const fetchMessages = async (cursor?: string) => {
+    const requestGeneration = cursor ? requestGenerationRef.current : requestGenerationRef.current + 1
+    if (!cursor) {
+      requestGenerationRef.current = requestGeneration
+    }
+
     try {
       const url = new URL("/api/inbox", window.location.origin)
+      url.searchParams.set("limit", pageSize)
       if (cursor) {
         url.searchParams.set("cursor", cursor)
       }
@@ -80,6 +91,7 @@ export function InboxList({ onMessageSelect, selectedMessageId, onMessagesDelete
 
       setError(false)
       const response = await fetch(url)
+      if (requestGeneration !== requestGenerationRef.current) return
       if (!response.ok) {
         throw new Error(`Failed to fetch inbox messages: ${response.status}`)
       }
@@ -99,17 +111,21 @@ export function InboxList({ onMessageSelect, selectedMessageId, onMessagesDelete
       setNextCursor(data.nextCursor ?? null)
       setTotal(nextTotal)
     } catch (error) {
-      console.error("Failed to fetch inbox messages:", error)
-      setError(true)
-      if (!cursor) {
-        setMessages([])
-        setNextCursor(null)
-        setTotal(0)
+      if (requestGeneration === requestGenerationRef.current) {
+        console.error("Failed to fetch inbox messages:", error)
+        setError(true)
+        if (!cursor) {
+          setMessages([])
+          setNextCursor(null)
+          setTotal(0)
+        }
       }
     } finally {
-      setLoading(false)
-      setRefreshing(false)
-      setLoadingMore(false)
+      if (requestGeneration === requestGenerationRef.current) {
+        setLoading(false)
+        setRefreshing(false)
+        setLoadingMore(false)
+      }
     }
   }
 
@@ -193,10 +209,11 @@ export function InboxList({ onMessageSelect, selectedMessageId, onMessagesDelete
 
     setLoading(true)
     setNextCursor(null)
+    setLoadingMore(false)
     setSelectedMessageIds([])
     fetchMessages()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, debouncedSearchQuery])
+  }, [session, debouncedSearchQuery, pageSize])
 
   if (!session) return null
 
@@ -232,6 +249,18 @@ export function InboxList({ onMessageSelect, selectedMessageId, onMessagesDelete
             <span className="hidden sm:inline">{tCommon("delete")}</span>
           </Button>
         )}
+        <Select value={pageSize} onValueChange={setPageSize} disabled={loading || deleting}>
+          <SelectTrigger className="h-8 w-[72px] px-2">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZE_OPTIONS.map(option => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <span className="ml-auto text-xs text-gray-500 whitespace-nowrap">
           {selectedCount > 0 ? `${selectedCount}/${total}` : t("messageCount", { count: total })}
         </span>
@@ -289,9 +318,12 @@ export function InboxList({ onMessageSelect, selectedMessageId, onMessagesDelete
                   />
                 </div>
                 <Mail className="h-4 w-4 text-primary/60 shrink-0" />
-                <div className="min-w-0 flex-1 md:grid md:grid-cols-[minmax(7rem,10rem)_minmax(0,1fr)] md:items-center md:gap-3">
-                  <div className="truncate font-medium md:font-normal">
-                    {message.from_address || message.emailAddress}
+                <div className="min-w-0 flex-1 md:grid md:grid-cols-[minmax(8rem,12rem)_minmax(7rem,10rem)_minmax(0,1fr)] md:items-center md:gap-3">
+                  <div className="truncate font-medium text-primary">
+                    {message.emailAddress}
+                  </div>
+                  <div className="truncate text-xs text-gray-500 md:text-sm md:text-foreground md:font-normal">
+                    {message.from_address || "-"}
                   </div>
                   <div className="min-w-0 truncate">
                     <span className="font-medium">{message.subject}</span>
@@ -300,9 +332,6 @@ export function InboxList({ onMessageSelect, selectedMessageId, onMessagesDelete
                         {" "}{message.content}
                       </span>
                     )}
-                  </div>
-                  <div className="md:hidden text-xs text-gray-400 truncate">
-                    {message.emailAddress}
                   </div>
                 </div>
                 <div className="hidden sm:block w-24 shrink-0 truncate text-right text-xs text-gray-500">
