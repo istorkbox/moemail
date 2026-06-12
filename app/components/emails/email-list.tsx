@@ -1,13 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { CreateDialog } from "./create-dialog"
 import { ShareDialog } from "./share-dialog"
-import { Mail, RefreshCw, Trash2 } from "lucide-react"
+import { Mail, RefreshCw, Search, Trash2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { useThrottle } from "@/hooks/use-throttle"
 import { EMAIL_CONFIG } from "@/config"
 import { useToast } from "@/components/ui/use-toast"
@@ -56,7 +57,18 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [total, setTotal] = useState(0)
   const [emailToDelete, setEmailToDelete] = useState<Email | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
   const { toast } = useToast()
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+  const filteredEmails = useMemo(() => {
+    if (!normalizedSearchQuery) return emails
+
+    return emails.filter(email =>
+      email.address.toLowerCase().includes(normalizedSearchQuery)
+    )
+  }, [emails, normalizedSearchQuery])
+  const hasSearchQuery = normalizedSearchQuery.length > 0
 
   const fetchEmails = async (cursor?: string) => {
     try {
@@ -184,13 +196,38 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
           </div>
           <CreateDialog onEmailCreated={handleRefresh} />
         </div>
+
+        <div className="p-2 border-b border-primary/10">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t("searchPlaceholder")}
+              aria-label={t("searchPlaceholder")}
+              className="h-8 pl-8 pr-8"
+            />
+            {hasSearchQuery && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0.5 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearchQuery("")}
+                aria-label={t("clearSearch")}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
         
         <div className="flex-1 overflow-auto p-2" onScroll={handleScroll}>
           {loading ? (
             <div className="text-center text-sm text-gray-500">{t("loading")}</div>
-          ) : emails.length > 0 ? (
+          ) : filteredEmails.length > 0 ? (
             <div className="space-y-1">
-              {emails.map(email => (
+              {filteredEmails.map(email => (
                 <div
                   key={email.id}
                   className={cn("flex items-center gap-2 p-2 rounded cursor-pointer text-sm group",
@@ -234,7 +271,7 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
             </div>
           ) : (
             <div className="text-center text-sm text-gray-500">
-              {t("noEmails")}
+              {hasSearchQuery ? t("noSearchResults") : t("noEmails")}
             </div>
           )}
         </div>
