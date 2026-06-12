@@ -2,6 +2,8 @@ name: Deploy
 
 on:
   push:
+    branches:
+      - prod
     tags:
       - 'v*'
   workflow_dispatch:
