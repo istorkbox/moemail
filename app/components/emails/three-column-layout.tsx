@@ -48,7 +48,7 @@ export function ThreeColumnLayout() {
   // 移动端视图逻辑
   const getMobileView = () => {
     if (selectedMessageId) return "message"
-    if (selectedEmail || leftTab === 'inbox') return "emails"
+    if (selectedEmail) return "emails"
     return "list"
   }
 
@@ -180,19 +180,40 @@ export function ThreeColumnLayout() {
       <div className="lg:hidden h-full min-h-0">
         <div className={cn("h-full", columnClass)}>
           {mobileView === "list" && (
-            <>
-              <div className={headerClass}>
-                <h2 className={titleClass}>{t("myEmails")}</h2>
+            <Tabs value={leftTab} onValueChange={(value) => {
+              setLeftTab(value as 'emails' | 'inbox')
+              setSelectedEmail(null)
+              setSelectedMessageId(null)
+            }} className="h-full flex flex-col">
+              <div className={cn(headerClass, "p-1.5")}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="emails" className="flex-1">
+                    <Mail className="h-4 w-4 mr-2" />
+                    {t("myEmails")}
+                  </TabsTrigger>
+                  <TabsTrigger value="inbox" className="flex-1">
+                    <Inbox className="h-4 w-4 mr-2" />
+                    {t("inbox")}
+                  </TabsTrigger>
+                </TabsList>
               </div>
               <div className="flex-1 overflow-auto">
-                <EmailList
-                  onEmailSelect={(email) => {
-                    setSelectedEmail(email)
-                  }}
-                  selectedEmailId={selectedEmail?.id}
-                />
+                <TabsContent value="emails" className="h-full m-0">
+                  <EmailList
+                    onEmailSelect={(email) => {
+                      setSelectedEmail(email)
+                    }}
+                    selectedEmailId={selectedEmail?.id}
+                  />
+                </TabsContent>
+                <TabsContent value="inbox" className="h-full m-0">
+                  <InboxList
+                    onMessageSelect={handleInboxMessageSelect}
+                    selectedMessageId={selectedMessageId}
+                  />
+                </TabsContent>
               </div>
-            </>
+            </Tabs>
           )}
 
           {mobileView === "emails" && selectedEmail && (
@@ -237,7 +258,12 @@ export function ThreeColumnLayout() {
             <div className="h-full flex flex-col">
               <div className={headerClass}>
                 <button
-                  onClick={() => setSelectedMessageId(null)}
+                  onClick={() => {
+                    setSelectedMessageId(null)
+                    if (leftTab === 'inbox') {
+                      setSelectedEmail(null)
+                    }
+                  }}
                   className="text-sm text-primary"
                 >
                   {t("backToMessageList")}
@@ -249,7 +275,12 @@ export function ThreeColumnLayout() {
                   emailId={selectedEmail.id}
                   messageId={selectedMessageId}
                   messageType={selectedMessageType}
-                  onClose={() => setSelectedMessageId(null)}
+                  onClose={() => {
+                    setSelectedMessageId(null)
+                    if (leftTab === 'inbox') {
+                      setSelectedEmail(null)
+                    }
+                  }}
                 />
               </div>
             </div>

@@ -44,6 +44,7 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
   const [total, setTotal] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+  const [error, setError] = useState(false)
 
   // 防抖搜索：当用户停止输入300ms后才执行搜索
   useEffect(() => {
@@ -65,20 +66,32 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
       if (debouncedSearchQuery.trim()) {
         url.searchParams.set('search', debouncedSearchQuery.trim())
       }
+      setError(false)
       const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch inbox messages: ${response.status}`)
+      }
       const data = await response.json() as InboxResponse
+      const nextMessages = Array.isArray(data.messages) ? data.messages : []
+      const nextTotal = typeof data.total === "number" ? data.total : nextMessages.length
       
       if (!cursor) {
-        setMessages(data.messages)
-        setNextCursor(data.nextCursor)
-        setTotal(data.total)
+        setMessages(nextMessages)
+        setNextCursor(data.nextCursor ?? null)
+        setTotal(nextTotal)
         return
       }
-      setMessages(prev => [...prev, ...data.messages])
-      setNextCursor(data.nextCursor)
-      setTotal(data.total)
+      setMessages(prev => [...prev, ...nextMessages])
+      setNextCursor(data.nextCursor ?? null)
+      setTotal(nextTotal)
     } catch (error) {
       console.error("Failed to fetch inbox messages:", error)
+      setError(true)
+      if (!cursor) {
+        setMessages([])
+        setNextCursor(null)
+        setTotal(0)
+      }
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -158,6 +171,10 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
       <div className="flex-1 overflow-auto p-2" onScroll={handleScroll}>
         {loading ? (
           <div className="text-center text-sm text-gray-500">{t("loading")}</div>
+        ) : error ? (
+          <div className="p-4 text-center text-sm text-gray-500">
+            {t("noMessages")}
+          </div>
         ) : messages.length > 0 ? (
           <div className="space-y-1">
             {messages.map(message => (

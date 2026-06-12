@@ -1,5 +1,5 @@
 import { createDb } from "@/lib/db"
-import { and, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm"
+import { and, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { emails, messages } from "@/lib/schema"
 import { encodeCursor, decodeCursor } from "@/lib/cursor"
@@ -16,6 +16,13 @@ const PAGE_SIZE = 20
 export async function GET(request: Request) {
   const userId = await getUserId()
 
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    )
+  }
+
   const { searchParams } = new URL(request.url)
   const cursor = searchParams.get('cursor')
   const search = searchParams.get('search')
@@ -26,7 +33,7 @@ export async function GET(request: Request) {
     // 获取用户的所有有效邮箱ID
     const userEmails = await db.query.emails.findMany({
       where: and(
-        eq(emails.userId, userId!),
+        eq(emails.userId, userId),
         gt(emails.expiresAt, new Date())
       ),
       columns: { id: true }
@@ -103,10 +110,7 @@ export async function GET(request: Request) {
     .from(messages)
     .innerJoin(emails, eq(messages.emailId, emails.id))
     .where(and(...whereConditions))
-    .orderBy((tables: any) => [
-      tables.messages.receivedAt ? tables.messages.receivedAt.desc() : null,
-      tables.messages.id.desc()
-    ])
+    .orderBy(desc(messages.receivedAt), desc(messages.id))
     .limit(PAGE_SIZE + 1)
 
     const hasMore = results.length > PAGE_SIZE
