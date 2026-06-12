@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
-import { Mail, RefreshCw, Search, X } from "lucide-react"
+import { Mail, RefreshCw, Search, Trash2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { useThrottle } from "@/hooks/use-throttle"
 
@@ -25,6 +26,7 @@ interface Message {
 interface InboxListProps {
   onMessageSelect: (message: Message) => void
   selectedMessageId?: string | null
+  onMessagesDelete?: (messageIds: string[]) => void
 }
 
 interface InboxResponse {
@@ -33,20 +35,26 @@ interface InboxResponse {
   total: number
 }
 
-export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps) {
+interface DeleteResponse {
+  deleted?: number
+}
+
+export function InboxList({ onMessageSelect, selectedMessageId, onMessagesDelete }: InboxListProps) {
   const { data: session } = useSession()
   const t = useTranslations("emails.inbox")
+  const tCommon = useTranslations("common.actions")
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [total, setTotal] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([])
   const [error, setError] = useState(false)
 
-  // 防抖搜索：当用户停止输入300ms后才执行搜索
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery)
@@ -55,32 +63,38 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
   }, [searchQuery])
 
   const hasSearchQuery = debouncedSearchQuery.trim().length > 0
+  const visibleMessageIds = messages.map(message => message.id)
+  const selectedCount = selectedMessageIds.length
+  const allVisibleSelected = visibleMessageIds.length > 0
+    && visibleMessageIds.every(id => selectedMessageIds.includes(id))
 
   const fetchMessages = async (cursor?: string) => {
     try {
       const url = new URL("/api/inbox", window.location.origin)
       if (cursor) {
-        url.searchParams.set('cursor', cursor)
+        url.searchParams.set("cursor", cursor)
       }
-      // 添加搜索参数
       if (debouncedSearchQuery.trim()) {
-        url.searchParams.set('search', debouncedSearchQuery.trim())
+        url.searchParams.set("search", debouncedSearchQuery.trim())
       }
+
       setError(false)
       const response = await fetch(url)
       if (!response.ok) {
         throw new Error(`Failed to fetch inbox messages: ${response.status}`)
       }
+
       const data = await response.json() as InboxResponse
       const nextMessages = Array.isArray(data.messages) ? data.messages : []
       const nextTotal = typeof data.total === "number" ? data.total : nextMessages.length
-      
+
       if (!cursor) {
         setMessages(nextMessages)
         setNextCursor(data.nextCursor ?? null)
         setTotal(nextTotal)
         return
       }
+
       setMessages(prev => [...prev, ...nextMessages])
       setNextCursor(data.nextCursor ?? null)
       setTotal(nextTotal)
@@ -104,6 +118,40 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
     await fetchMessages()
   }
 
+  const handleDeleteSelected = async () => {
+    if (selectedMessageIds.length === 0) return
+
+    const messageIds = selectedMessageIds
+    try {
+      setDeleting(true)
+      const response = await fetch("/api/inbox", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ messageIds })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete inbox messages: ${response.status}`)
+      }
+
+      const data = await response.json().catch(() => ({})) as DeleteResponse
+      const deletedCount = typeof data.deleted === "number" ? data.deleted : messageIds.length
+      const deletedIds = new Set(messageIds)
+
+      setMessages(prev => prev.filter(message => !deletedIds.has(message.id)))
+      setTotal(prev => Math.max(0, prev - deletedCount))
+      setSelectedMessageIds([])
+      onMessagesDelete?.(messageIds)
+    } catch (error) {
+      console.error("Failed to delete inbox messages:", error)
+      setError(true)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const handleScroll = useThrottle((e: React.UIEvent<HTMLDivElement>) => {
     if (loadingMore) return
 
@@ -117,8 +165,36 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
     }
   }, 200)
 
+  const toggleMessageSelection = (messageId: string, checked: boolean) => {
+    setSelectedMessageIds(prev => {
+      if (checked) {
+        return prev.includes(messageId) ? prev : [...prev, messageId]
+      }
+      return prev.filter(id => id !== messageId)
+    })
+  }
+
+  const toggleVisibleSelection = (checked: boolean) => {
+    setSelectedMessageIds(prev => {
+      if (!checked) {
+        return prev.filter(id => !visibleMessageIds.includes(id))
+      }
+      return Array.from(new Set([...prev, ...visibleMessageIds]))
+    })
+  }
+
+  const formatTime = (timestamp?: number) => {
+    if (!timestamp) return ""
+    return new Date(timestamp).toLocaleString()
+  }
+
   useEffect(() => {
-    if (session) fetchMessages()
+    if (!session) return
+
+    setLoading(true)
+    setNextCursor(null)
+    setSelectedMessageIds([])
+    fetchMessages()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, debouncedSearchQuery])
 
@@ -126,21 +202,39 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-2 flex justify-between items-center border-b border-primary/20">
-        <div className="flex items-center gap-2">
+      <div className="p-2 flex items-center gap-2 border-b border-primary/20">
+        <div onClick={(event) => event.stopPropagation()}>
+          <Checkbox
+            checked={allVisibleSelected}
+            onChange={toggleVisibleSelection}
+            disabled={messages.length === 0 || deleting}
+            className="h-4 w-4"
+          />
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleRefresh}
+          disabled={refreshing || deleting}
+          className={cn("h-8 w-8 shrink-0", refreshing && "animate-spin")}
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
+        {selectedCount > 0 && (
           <Button
             variant="ghost"
-            size="icon"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className={cn("h-8 w-8", refreshing && "animate-spin")}
+            size="sm"
+            onClick={handleDeleteSelected}
+            disabled={deleting}
+            className="h-8 gap-1 px-2 text-destructive hover:text-destructive"
           >
-            <RefreshCw className="h-4 w-4" />
+            <Trash2 className="h-4 w-4" />
+            <span className="hidden sm:inline">{tCommon("delete")}</span>
           </Button>
-          <span className="text-xs text-gray-500">
-            {t("messageCount", { count: total })}
-          </span>
-        </div>
+        )}
+        <span className="ml-auto text-xs text-gray-500 whitespace-nowrap">
+          {selectedCount > 0 ? `${selectedCount}/${total}` : t("messageCount", { count: total })}
+        </span>
       </div>
 
       <div className="p-2 border-b border-primary/10">
@@ -167,34 +261,52 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
           )}
         </div>
       </div>
-      
-      <div className="flex-1 overflow-auto p-2" onScroll={handleScroll}>
+
+      <div className="flex-1 overflow-auto" onScroll={handleScroll}>
         {loading ? (
-          <div className="text-center text-sm text-gray-500">{t("loading")}</div>
+          <div className="p-4 text-center text-sm text-gray-500">{t("loading")}</div>
         ) : error ? (
           <div className="p-4 text-center text-sm text-gray-500">
             {t("noMessages")}
           </div>
         ) : messages.length > 0 ? (
-          <div className="space-y-1">
+          <div className="divide-y divide-primary/10">
             {messages.map(message => (
               <div
                 key={message.id}
-                className={cn("flex items-start gap-2 p-2 rounded cursor-pointer text-sm group",
-                  "hover:bg-primary/5",
+                className={cn(
+                  "flex items-center gap-2 px-2 py-2 cursor-pointer text-sm group hover:bg-primary/5",
                   selectedMessageId === message.id && "bg-primary/10"
                 )}
                 onClick={() => onMessageSelect(message)}
               >
-                <Mail className="h-4 w-4 text-primary/60 mt-0.5 shrink-0" />
-                <div className="truncate flex-1 min-w-0">
-                  <div className="font-medium truncate">{message.subject}</div>
-                  <div className="text-xs text-gray-500 truncate">
-                    {message.from_address} → {message.emailAddress}
+                <div onClick={(event) => event.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedMessageIds.includes(message.id)}
+                    onChange={(checked) => toggleMessageSelection(message.id, checked)}
+                    disabled={deleting}
+                    className="h-4 w-4"
+                  />
+                </div>
+                <Mail className="h-4 w-4 text-primary/60 shrink-0" />
+                <div className="min-w-0 flex-1 md:grid md:grid-cols-[minmax(7rem,10rem)_minmax(0,1fr)] md:items-center md:gap-3">
+                  <div className="truncate font-medium md:font-normal">
+                    {message.from_address || message.emailAddress}
                   </div>
-                  <div className="text-xs text-gray-400">
-                    {message.received_at && new Date(message.received_at).toLocaleString()}
+                  <div className="min-w-0 truncate">
+                    <span className="font-medium">{message.subject}</span>
+                    {message.content && (
+                      <span className="hidden sm:inline text-gray-400">
+                        {" "}{message.content}
+                      </span>
+                    )}
                   </div>
+                  <div className="md:hidden text-xs text-gray-400 truncate">
+                    {message.emailAddress}
+                  </div>
+                </div>
+                <div className="hidden sm:block w-24 shrink-0 truncate text-right text-xs text-gray-500">
+                  {formatTime(message.received_at)}
                 </div>
               </div>
             ))}
@@ -205,7 +317,7 @@ export function InboxList({ onMessageSelect, selectedMessageId }: InboxListProps
             )}
           </div>
         ) : (
-          <div className="text-center text-sm text-gray-500">
+          <div className="p-4 text-center text-sm text-gray-500">
             {hasSearchQuery ? t("noSearchResults") : t("noMessages")}
           </div>
         )}

@@ -75,6 +75,15 @@ export function ThreeColumnLayout() {
     setSelectedEmail(fakeEmail)
   }
 
+  const handleInboxMessagesDelete = (messageIds: string[]) => {
+    if (selectedMessageId && messageIds.includes(selectedMessageId)) {
+      setSelectedMessageId(null)
+      if (leftTab === 'inbox') {
+        setSelectedEmail(null)
+      }
+    }
+  }
+
   const handleSendSuccess = () => {
     setRefreshTrigger(prev => prev + 1)
   }
@@ -83,7 +92,7 @@ export function ThreeColumnLayout() {
     <div className="pb-5 pt-20 h-full flex flex-col">
       {/* 桌面端三栏布局 */}
       <div className="hidden lg:grid grid-cols-12 gap-4 h-full min-h-0">
-        <div className={cn("col-span-3", columnClass)}>
+        <div className={cn(leftTab === 'inbox' ? "col-span-7" : "col-span-3", columnClass)}>
           <Tabs value={leftTab} onValueChange={(value) => {
             setLeftTab(value as 'emails' | 'inbox')
             setSelectedEmail(null)
@@ -115,12 +124,14 @@ export function ThreeColumnLayout() {
                 <InboxList
                   onMessageSelect={handleInboxMessageSelect}
                   selectedMessageId={selectedMessageId}
+                  onMessagesDelete={handleInboxMessagesDelete}
                 />
               </TabsContent>
             </div>
           </Tabs>
         </div>
 
+        {leftTab === 'emails' && (
         <div className={cn("col-span-4", columnClass)}>
           <div className={headerClass}>
             <h2 className={titleClass}>
@@ -156,6 +167,7 @@ export function ThreeColumnLayout() {
             </div>
           )}
         </div>
+        )}
 
         <div className={cn("col-span-5", columnClass)}>
           <div className={headerClass}>
@@ -210,6 +222,7 @@ export function ThreeColumnLayout() {
                   <InboxList
                     onMessageSelect={handleInboxMessageSelect}
                     selectedMessageId={selectedMessageId}
+                    onMessagesDelete={handleInboxMessagesDelete}
                   />
                 </TabsContent>
               </div>
